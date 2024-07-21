@@ -19,7 +19,7 @@ let players = {};
 let bullets = [];
 
 io.on('connection', (socket) => {
-  console.log('a user connected', socket.id);
+  console.log('A user connected:', socket.id);
 
   // Initialize the new player
   players[socket.id] = {
@@ -28,24 +28,29 @@ io.on('connection', (socket) => {
     health: 100
   };
 
+  console.log('New player created:', socket.id, players[socket.id]);
+
   // Send the new player info to all connected clients
   io.emit('newPlayer', { id: socket.id, ...players[socket.id] });
 
   // Send the current state of all players to the new player
+  console.log('Sending current players to new player:', players);
   socket.emit('currentPlayers', players);
 
   socket.on('disconnect', () => {
-    console.log('user disconnected', socket.id);
+    console.log('User disconnected:', socket.id);
     delete players[socket.id];
     io.emit('playerDisconnected', socket.id);
   });
 
   socket.on('playerMove', (position) => {
+    console.log('Player moved:', socket.id, position);
     players[socket.id] = { ...players[socket.id], ...position };
     socket.broadcast.emit('playerMoved', { id: socket.id, ...position });
   });
 
   socket.on('shoot', (bullet) => {
+    console.log('Player shot:', socket.id, bullet);
     const newBullet = { ...bullet, playerId: socket.id };
     bullets.push(newBullet);
     io.emit('bulletShot', newBullet);
