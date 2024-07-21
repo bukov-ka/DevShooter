@@ -16,10 +16,11 @@ const io = new Server(server, {
 });
 
 let players = {};
+let bullets = [];
 
 io.on('connection', (socket) => {
   console.log('a user connected');
-  
+
   players[socket.id] = { x: 0, y: 0 };
 
   socket.on('disconnect', () => {
@@ -31,6 +32,11 @@ io.on('connection', (socket) => {
   socket.on('playerMove', (position) => {
     players[socket.id] = position;
     io.emit('playerUpdate', { id: socket.id, ...position });
+  });
+
+  socket.on('shoot', (bullet) => {
+    bullets.push(bullet);
+    io.emit('bulletShot', bullet);
   });
 
   socket.emit('currentPlayers', players); // Send current players to the new client
