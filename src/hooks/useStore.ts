@@ -1,20 +1,34 @@
-// src/hooks/useStore.ts
 import create from 'zustand';
 
+interface Player {
+  id: string;
+  x: number;
+  y: number;
+  health: number;
+}
+
 interface GameState {
-  players: { id: string; x: number; y: number; health: number }[];
-  addPlayer: (id: string) => void;
+  players: Player[];
+  localPlayerId: string | null;
+  addPlayer: (id: string, x: number, y: number, health: number) => void;
   removePlayer: (id: string) => void;
   updatePlayer: (id: string, x: number, y: number) => void;
+  setLocalPlayerId: (id: string) => void;
 }
 
 export const useStore = create<GameState>((set) => ({
   players: [],
-  addPlayer: (id) => set((state) => ({ players: [...state.players, { id, x: 0, y: 0, health: 100 }] })),
-  removePlayer: (id) => set((state) => ({ players: state.players.filter((player) => player.id !== id) })),
+  localPlayerId: null,
+  addPlayer: (id, x, y, health) => set((state) => ({
+    players: [...state.players, { id, x, y, health }]
+  })),
+  removePlayer: (id) => set((state) => ({
+    players: state.players.filter((player) => player.id !== id)
+  })),
   updatePlayer: (id, x, y) => set((state) => ({
     players: state.players.map((player) =>
       player.id === id ? { ...player, x, y } : player
     ),
   })),
+  setLocalPlayerId: (id) => set({ localPlayerId: id }),
 }));

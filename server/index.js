@@ -19,27 +19,37 @@ let players = {};
 let bullets = [];
 
 io.on('connection', (socket) => {
-  console.log('a user connected');
+  console.log('a user connected', socket.id);
 
-  players[socket.id] = { x: 0, y: 0 };
+  // Initialize the new player
+  players[socket.id] = {
+    x: Math.random() * 800,
+    y: Math.random() * 600,
+    health: 100
+  };
+
+  // Send the new player info to all connected clients
+  io.emit('newPlayer', { id: socket.id, ...players[socket.id] });
+
+  // Send the current state of all players to the new player
+  socket.emit('currentPlayers', players);
 
   socket.on('disconnect', () => {
-    console.log('user disconnected');
+    console.log('user disconnected', socket.id);
     delete players[socket.id];
     io.emit('playerDisconnected', socket.id);
   });
 
   socket.on('playerMove', (position) => {
-    players[socket.id] = position;
-    io.emit('playerUpdate', { id: socket.id, ...position });
+    players[socket.id] = { ...players[socket.id], ...position };
+    socket.broadcast.emit('playerMoved', { id: socket.id, ...position });
   });
 
   socket.on('shoot', (bullet) => {
-    bullets.push(bullet);
-    io.emit('bulletShot', bullet);
+    const newBullet = { ...bullet, playerId: socket.id };
+    bullets.push(newBullet);
+    io.emit('bulletShot', newBullet);
   });
-
-  socket.emit('currentPlayers', players); // Send current players to the new client
 });
 
 const PORT = process.env.PORT || 3000;
