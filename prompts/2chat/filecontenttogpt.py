@@ -14,7 +14,7 @@ def get_files_with_extension(directory, extensions, skip_dirs, skip_files):
     return file_list
 
 def extract_content_and_write_to_log(file_list):
-    with open('output.log', 'w', encoding='utf-8') as output_file:
+    with open('sources.txt', 'w', encoding='utf-8') as output_file:
         for file_path in file_list:
             with open(file_path, 'r', encoding='utf-8') as input_file:
                 content = input_file.read()
