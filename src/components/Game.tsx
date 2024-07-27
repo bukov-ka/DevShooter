@@ -9,6 +9,7 @@ import InputHandler from './InputHandler';
 import Error500Grenade from './abilities/Error500Grenade';
 import CSSShift from './abilities/CSSShift';
 import LoadTesting from './abilities/LoadTesting';
+import PlayerHUD from './PlayerHUD'; 
 
 const Game: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -102,6 +103,7 @@ const Game: React.FC = () => {
           playerId={localPlayerId!}
         />
       )}
+      <PlayerHUD /> 
     </>
   );
 };
