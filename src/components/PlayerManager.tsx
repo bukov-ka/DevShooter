@@ -1,106 +1,91 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Matter from 'matter-js';
 import { Socket } from 'socket.io-client';
-import { useStore } from '../hooks/useStore';
+import { useStore, PlayerType } from '../hooks/useStore';
 
 interface PlayerManagerProps {
   socketRef: React.RefObject<Socket | null>;
   engineRef: React.RefObject<Matter.Engine | null>;
-  playerBodiesRef: React.RefObject<{ [id: string]: Matter.Body }>;
+  playerBodiesRef: React.MutableRefObject<{ [id: string]: Matter.Body }>;
 }
 
 const PlayerManager: React.FC<PlayerManagerProps> = ({ socketRef, engineRef, playerBodiesRef }) => {
-  const { addPlayer, updatePlayer, removePlayer, players } = useStore();
-  const lastUpdateRef = useRef<{ [id: string]: number }>({});
+  const { addPlayer, updatePlayer, removePlayer, players, setLocalPlayerType, localPlayerId } = useStore();
+  const addedPlayersRef = useRef<Set<string>>(new Set());
 
-  const handleCurrentPlayers = useCallback((serverPlayers: any) => {
-    console.log('Received currentPlayers:', serverPlayers);
-    Object.entries(serverPlayers).forEach(([id, playerData]: [string, any]) => {
-      console.log('Adding player:', id, playerData);
-      addPlayer(id, playerData.x, playerData.y, playerData.health);
-    });
-  }, [addPlayer]);
+  const getRandomPlayerType = (): PlayerType => {
+    const types: PlayerType[] = ['Backend Developer', 'Frontend Developer', 'QA'];
+    return types[Math.floor(Math.random() * types.length)];
+  };
 
-  const handleNewPlayer = useCallback((player: any) => {
-    console.log('New player joined:', player);
-    addPlayer(player.id, player.x, player.y, player.health);
-  }, [addPlayer]);
-
-  const handlePlayerMoved = useCallback(({ id, x, y }: { id: string, x: number, y: number }) => {
-    console.log('Player moved:', id, x, y);
-    updatePlayer(id, x, y);
-    lastUpdateRef.current[id] = Date.now();
-  }, [updatePlayer]);
-
-  const handlePlayerDisconnected = useCallback((id: string) => {
-    console.log('Player disconnected:', id);
-    removePlayer(id);
-  }, [removePlayer]);
+  const createPlayerBody = (id: string, x: number, y: number, isLocal: boolean) => {
+    if (engineRef.current && !playerBodiesRef.current[id]) {
+      const newBody = Matter.Bodies.circle(x, y, 25, {
+        render: { fillStyle: isLocal ? 'blue' : 'red' },
+        friction: 0.1,  // Add some friction (0 to 1)
+        frictionAir: 0.2,  // Add air friction (0 to 1)
+        restitution: 0.3,  // Add some bounce (0 to 1)
+        density: 0.001,  // Adjust density to make the body lighter
+      });
+      Matter.World.add(engineRef.current.world, newBody);
+      playerBodiesRef.current[id] = newBody;
+    }
+  };
 
   useEffect(() => {
-    if (!socketRef.current) {
-      console.log('Socket not initialized');
-      return;
-    }
-
-    console.log('Setting up socket listeners in PlayerManager');
+    if (!socketRef.current || !engineRef.current) return;
 
     const socket = socketRef.current;
 
-    socket.on('currentPlayers', handleCurrentPlayers);
-    socket.on('newPlayer', handleNewPlayer);
-    socket.on('playerMoved', handlePlayerMoved);
-    socket.on('playerDisconnected', handlePlayerDisconnected);
+    socket.on('currentPlayers', (serverPlayers: any) => {
+      Object.entries(serverPlayers).forEach(([id, playerData]: [string, any]) => {
+        if (!addedPlayersRef.current.has(id)) {
+          const type = playerData.type || getRandomPlayerType();
+          addPlayer(id, playerData.x, playerData.y, playerData.health, type);
+          createPlayerBody(id, playerData.x, playerData.y, id === socket.id);
+          addedPlayersRef.current.add(id);
+          if (id === socket.id) {
+            setLocalPlayerType(type);
+          }
+        }
+      });
+    });
 
-    return () => {
-      socket.off('currentPlayers', handleCurrentPlayers);
-      socket.off('newPlayer', handleNewPlayer);
-      socket.off('playerMoved', handlePlayerMoved);
-      socket.off('playerDisconnected', handlePlayerDisconnected);
-    };
-  }, [socketRef, handleCurrentPlayers, handleNewPlayer, handlePlayerMoved, handlePlayerDisconnected]);
+    socket.on('newPlayer', (player: any) => {
+      if (!addedPlayersRef.current.has(player.id)) {
+        const type = player.type || getRandomPlayerType();
+        addPlayer(player.id, player.x, player.y, player.health, type);
+        createPlayerBody(player.id, player.x, player.y, player.id === socket.id);
+        addedPlayersRef.current.add(player.id);
+        if (player.id === socket.id) {
+          setLocalPlayerType(type);
+        }
+      }
+    });
 
-  useEffect(() => {
-    if (!engineRef.current) {
-      console.log('Engine not initialized');
-      return;
-    }
+    socket.on('playerMoved', ({ id, x, y }: { id: string, x: number, y: number }) => {
+      updatePlayer(id, x, y);
+      if (playerBodiesRef.current[id]) {
+        Matter.Body.setPosition(playerBodiesRef.current[id], { x, y });
+      }
+    });
 
-    const engine = engineRef.current;
-
-    // Remove disconnected players
-    Object.keys(playerBodiesRef.current).forEach((id) => {
-      if (!players.find(p => p.id === id)) {
-        console.log('Removing disconnected player:', id);
-        Matter.World.remove(engine.world, playerBodiesRef.current[id]);
+    socket.on('playerDisconnected', (id: string) => {
+      removePlayer(id);
+      if (playerBodiesRef.current[id]) {
+        Matter.World.remove(engineRef.current.world, playerBodiesRef.current[id]);
         delete playerBodiesRef.current[id];
       }
+      addedPlayersRef.current.delete(id);
     });
 
-    // Add new players and update existing ones
-    players.forEach((player) => {
-      if (playerBodiesRef.current[player.id]) {
-        const body = playerBodiesRef.current[player.id];
-        const lastUpdate = lastUpdateRef.current[player.id] || 0;
-        const currentTime = Date.now();
-
-        // Only update position if it's a recent server update or local player
-        if (currentTime - lastUpdate < 100 || player.id === socketRef.current?.id) {
-          Matter.Body.setPosition(body, { x: player.x, y: player.y });
-        }
-      } else {
-        console.log('Creating new player body:', player.id, player.x, player.y);
-        const newBody = Matter.Bodies.rectangle(player.x, player.y, 50, 50, {
-          render: { fillStyle: player.id === socketRef.current?.id ? 'yellow' : 'blue' },
-          frictionAir: 0.1,
-          friction: 0.1,
-          inertia: Infinity,
-        });
-        Matter.World.add(engine.world, newBody);
-        playerBodiesRef.current[player.id] = newBody;
-      }
-    });
-  }, [players, engineRef, socketRef, playerBodiesRef]);
+    return () => {
+      socket.off('currentPlayers');
+      socket.off('newPlayer');
+      socket.off('playerMoved');
+      socket.off('playerDisconnected');
+    };
+  }, [socketRef, engineRef, addPlayer, updatePlayer, removePlayer, setLocalPlayerType, playerBodiesRef]);
 
   return null;
 };

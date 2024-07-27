@@ -7,11 +7,11 @@ interface InputHandlerProps {
   socketRef: React.RefObject<Socket | null>;
   canvasRef: React.RefObject<HTMLCanvasElement>;
   engineRef: React.RefObject<Matter.Engine | null>;
-  playerBodiesRef: React.RefObject<{ [id: string]: Matter.Body }>;
+  playerBodiesRef: React.MutableRefObject<{ [id: string]: Matter.Body }>;
 }
 
 const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engineRef, playerBodiesRef }) => {
-  const { players, updatePlayer } = useStore();
+  const { players, updatePlayer, localPlayerId } = useStore();
   const keysPressed = useRef<Set<string>>(new Set());
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -23,8 +23,10 @@ const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engin
   }, []);
 
   const handleMouseDown = useCallback((e: MouseEvent) => {
-    const localPlayer = players.find(p => p.id === socketRef.current?.id);
-    if (!localPlayer || !canvasRef.current) return;
+    if (!socketRef.current || !canvasRef.current || !localPlayerId) return;
+
+    const localPlayer = players.find(p => p.id === localPlayerId);
+    if (!localPlayer) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -41,8 +43,12 @@ const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engin
       y: direction.y / magnitude,
     };
 
-    socketRef.current?.emit('shoot', { position: { x: localPlayer.x, y: localPlayer.y }, direction: normalizedDirection });
-  }, [players, socketRef, canvasRef]);
+    socketRef.current.emit('bulletFired', { 
+      position: { x: localPlayer.x, y: localPlayer.y }, 
+      velocity: normalizedDirection,
+      playerId: localPlayerId
+    });
+  }, [players, localPlayerId, socketRef, canvasRef]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -57,17 +63,17 @@ const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engin
   }, [handleKeyDown, handleKeyUp, handleMouseDown]);
 
   useEffect(() => {
-    if (!engineRef.current || !playerBodiesRef.current) return;
+    if (!engineRef.current || !playerBodiesRef.current || !localPlayerId) return;
 
     const updateInterval = setInterval(() => {
-      const localPlayer = players.find(p => p.id === socketRef.current?.id);
+      const localPlayer = players.find(p => p.id === localPlayerId);
       if (!localPlayer) return;
 
-      const playerBody = playerBodiesRef.current[localPlayer.id];
+      const playerBody = playerBodiesRef.current[localPlayerId];
       if (!playerBody) return;
 
       const force = { x: 0, y: 0 };
-      const speed = 0.005; // Increased by a factor of 10
+      const speed = 0.007;
 
       if (keysPressed.current.has('w')) force.y -= speed;
       if (keysPressed.current.has('s')) force.y += speed;
@@ -76,15 +82,12 @@ const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engin
 
       Matter.Body.applyForce(playerBody, playerBody.position, force);
 
-      // Update player position in the game state
-      updatePlayer(localPlayer.id, playerBody.position.x, playerBody.position.y);
-
-      // Send updated position to the server
+      updatePlayer(localPlayerId, playerBody.position.x, playerBody.position.y);
       socketRef.current?.emit('playerMove', { x: playerBody.position.x, y: playerBody.position.y });
-    }, 1000 / 60); // 60 times per second
+    }, 1000 / 60);
 
     return () => clearInterval(updateInterval);
-  }, [players, updatePlayer, socketRef, engineRef, playerBodiesRef]);
+  }, [players, updatePlayer, socketRef, engineRef, playerBodiesRef, localPlayerId]);
 
   return null;
 };

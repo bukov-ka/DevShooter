@@ -6,6 +6,9 @@ import GameCanvas from './GameCanvas';
 import PlayerManager from './PlayerManager';
 import BulletManager from './BulletManager';
 import InputHandler from './InputHandler';
+import Error500Grenade from './abilities/Error500Grenade';
+import CSSShift from './abilities/CSSShift';
+import LoadTesting from './abilities/LoadTesting';
 
 const Game: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -14,14 +17,14 @@ const Game: React.FC = () => {
   const renderRef = useRef<Matter.Render | null>(null);
   const runnerRef = useRef<Matter.Runner | null>(null);
   const playerBodiesRef = useRef<{ [id: string]: Matter.Body }>({});
-  const { setLocalPlayerId } = useStore();
+  const { localPlayerId, localPlayerType, setLocalPlayerId } = useStore();
 
   useEffect(() => {
     const newSocket = io('http://localhost:3000');
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
-      console.log('Connected to server');
+      console.log('Connected to server with ID:', newSocket.id);
       setLocalPlayerId(newSocket.id);
     });
 
@@ -79,6 +82,26 @@ const Game: React.FC = () => {
         engineRef={{ current: engine }}
         playerBodiesRef={playerBodiesRef}
       />
+      {localPlayerType === 'Backend Developer' && (
+        <Error500Grenade
+          engine={engine}
+          socketRef={{ current: socket }}
+          playerId={localPlayerId!}
+        />
+      )}
+      {localPlayerType === 'Frontend Developer' && (
+        <CSSShift
+          socketRef={{ current: socket }}
+          playerId={localPlayerId!}
+        />
+      )}
+      {localPlayerType === 'QA' && (
+        <LoadTesting
+          engine={engine}
+          socketRef={{ current: socket }}
+          playerId={localPlayerId!}
+        />
+      )}
     </>
   );
 };

@@ -7,52 +7,68 @@ interface BulletManagerProps {
   engineRef: React.RefObject<Matter.Engine | null>;
 }
 
+interface Bullet {
+  id: string;
+  body: Matter.Body;
+}
+
 const BulletManager: React.FC<BulletManagerProps> = ({ socketRef, engineRef }) => {
-  const [bullets, setBullets] = useState<{ id: string; body: Matter.Body }[]>([]);
+  const [bullets, setBullets] = useState<Bullet[]>([]);
 
   useEffect(() => {
     if (!socketRef.current || !engineRef.current) return;
 
-    socketRef.current.on('bulletShot', (bullet: any) => {
-      if (engineRef.current) {
-        const newBullet = Matter.Bodies.circle(bullet.position.x, bullet.position.y, 5, {
-          render: { fillStyle: 'red' },
-          frictionAir: 0,
-          friction: 0,
-          inertia: Infinity,
-        });
-        Matter.Body.setVelocity(newBullet, {
-          x: bullet.direction.x * 10,
-          y: bullet.direction.y * 10,
-        });
-        Matter.World.add(engineRef.current.world, newBullet);
-        setBullets((prev) => [...prev, { id: Math.random().toString(), body: newBullet }]);
-      }
-    });
+    const socket = socketRef.current;
+    const engine = engineRef.current;
+
+    const handleBulletFired = (bulletData: any) => {
+      const { position, velocity, playerId } = bulletData;
+      const bullet = Matter.Bodies.circle(position.x, position.y, 5, {
+        render: { fillStyle: 'red' },
+        frictionAir: 0,
+        friction: 0,
+        restitution: 0,
+      });
+
+      Matter.Body.setVelocity(bullet, {
+        x: velocity.x * 10,
+        y: velocity.y * 10,
+      });
+
+      Matter.World.add(engine.world, bullet);
+      setBullets((prevBullets) => [...prevBullets, { id: bulletData.id, body: bullet }]);
+    };
+
+    socket.on('bulletFired', handleBulletFired);
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.off('bulletShot');
-      }
+      socket.off('bulletFired', handleBulletFired);
     };
   }, [socketRef, engineRef]);
 
   // Clean up bullets that have traveled too far
   useEffect(() => {
+    if (!engineRef.current) return;
+
+    const engine = engineRef.current;
+
     const cleanupInterval = setInterval(() => {
-      if (engineRef.current) {
-        setBullets((prevBullets) => {
-          const newBullets = prevBullets.filter((bullet) => {
-            const position = bullet.body.position;
-            const isOutOfBounds = position.x < 0 || position.x > window.innerWidth || position.y < 0 || position.y > window.innerHeight;
-            if (isOutOfBounds) {
-              Matter.World.remove(engineRef.current!.world, bullet.body);
-            }
-            return !isOutOfBounds;
-          });
-          return newBullets;
+      setBullets((prevBullets) => {
+        const newBullets = prevBullets.filter((bullet) => {
+          const position = bullet.body.position;
+          const isOutOfBounds = 
+            position.x < 0 || 
+            position.x > window.innerWidth || 
+            position.y < 0 || 
+            position.y > window.innerHeight;
+          
+          if (isOutOfBounds) {
+            Matter.World.remove(engine.world, bullet.body);
+          }
+          return !isOutOfBounds;
         });
-      }
+        return newBullets;
+      });
     }, 1000); // Check every second
 
     return () => clearInterval(cleanupInterval);
