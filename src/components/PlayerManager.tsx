@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import Matter from 'matter-js';
 import { Socket } from 'socket.io-client';
 import { useStore } from '../hooks/useStore';
@@ -6,11 +6,36 @@ import { useStore } from '../hooks/useStore';
 interface PlayerManagerProps {
   socketRef: React.RefObject<Socket | null>;
   engineRef: React.RefObject<Matter.Engine | null>;
+  playerBodiesRef: React.RefObject<{ [id: string]: Matter.Body }>;
 }
 
-const PlayerManager: React.FC<PlayerManagerProps> = ({ socketRef, engineRef }) => {
-  const [playerBodies, setPlayerBodies] = useState<{ [id: string]: Matter.Body }>({});
+const PlayerManager: React.FC<PlayerManagerProps> = ({ socketRef, engineRef, playerBodiesRef }) => {
   const { addPlayer, updatePlayer, removePlayer, players } = useStore();
+  const lastUpdateRef = useRef<{ [id: string]: number }>({});
+
+  const handleCurrentPlayers = useCallback((serverPlayers: any) => {
+    console.log('Received currentPlayers:', serverPlayers);
+    Object.entries(serverPlayers).forEach(([id, playerData]: [string, any]) => {
+      console.log('Adding player:', id, playerData);
+      addPlayer(id, playerData.x, playerData.y, playerData.health);
+    });
+  }, [addPlayer]);
+
+  const handleNewPlayer = useCallback((player: any) => {
+    console.log('New player joined:', player);
+    addPlayer(player.id, player.x, player.y, player.health);
+  }, [addPlayer]);
+
+  const handlePlayerMoved = useCallback(({ id, x, y }: { id: string, x: number, y: number }) => {
+    console.log('Player moved:', id, x, y);
+    updatePlayer(id, x, y);
+    lastUpdateRef.current[id] = Date.now();
+  }, [updatePlayer]);
+
+  const handlePlayerDisconnected = useCallback((id: string) => {
+    console.log('Player disconnected:', id);
+    removePlayer(id);
+  }, [removePlayer]);
 
   useEffect(() => {
     if (!socketRef.current) {
@@ -22,36 +47,18 @@ const PlayerManager: React.FC<PlayerManagerProps> = ({ socketRef, engineRef }) =
 
     const socket = socketRef.current;
 
-    socket.on('currentPlayers', (serverPlayers: any) => {
-      console.log('Received currentPlayers:', serverPlayers);
-      Object.entries(serverPlayers).forEach(([id, playerData]: [string, any]) => {
-        console.log('Adding player:', id, playerData);
-        addPlayer(id, playerData.x, playerData.y, playerData.health);
-      });
-    });
-
-    socket.on('newPlayer', (player: any) => {
-      console.log('New player joined:', player);
-      addPlayer(player.id, player.x, player.y, player.health);
-    });
-
-    socket.on('playerMoved', ({ id, x, y }: { id: string, x: number, y: number }) => {
-      console.log('Player moved:', id, x, y);
-      updatePlayer(id, x, y);
-    });
-
-    socket.on('playerDisconnected', (id: string) => {
-      console.log('Player disconnected:', id);
-      removePlayer(id);
-    });
+    socket.on('currentPlayers', handleCurrentPlayers);
+    socket.on('newPlayer', handleNewPlayer);
+    socket.on('playerMoved', handlePlayerMoved);
+    socket.on('playerDisconnected', handlePlayerDisconnected);
 
     return () => {
-      socket.off('currentPlayers');
-      socket.off('newPlayer');
-      socket.off('playerMoved');
-      socket.off('playerDisconnected');
+      socket.off('currentPlayers', handleCurrentPlayers);
+      socket.off('newPlayer', handleNewPlayer);
+      socket.off('playerMoved', handlePlayerMoved);
+      socket.off('playerDisconnected', handlePlayerDisconnected);
     };
-  }, [socketRef, addPlayer, updatePlayer, removePlayer]);
+  }, [socketRef, handleCurrentPlayers, handleNewPlayer, handlePlayerMoved, handlePlayerDisconnected]);
 
   useEffect(() => {
     if (!engineRef.current) {
@@ -59,41 +66,41 @@ const PlayerManager: React.FC<PlayerManagerProps> = ({ socketRef, engineRef }) =
       return;
     }
 
-    console.log('Updating player bodies. Current players:', players);
-
     const engine = engineRef.current;
 
     // Remove disconnected players
-    Object.keys(playerBodies).forEach((id) => {
+    Object.keys(playerBodiesRef.current).forEach((id) => {
       if (!players.find(p => p.id === id)) {
         console.log('Removing disconnected player:', id);
-        Matter.World.remove(engine.world, playerBodies[id]);
-        setPlayerBodies(prev => {
-          const newBodies = { ...prev };
-          delete newBodies[id];
-          return newBodies;
-        });
+        Matter.World.remove(engine.world, playerBodiesRef.current[id]);
+        delete playerBodiesRef.current[id];
       }
     });
 
     // Add new players and update existing ones
     players.forEach((player) => {
-      if (playerBodies[player.id]) {
-        console.log('Updating player position:', player.id, player.x, player.y);
-        Matter.Body.setPosition(playerBodies[player.id], { x: player.x, y: player.y });
+      if (playerBodiesRef.current[player.id]) {
+        const body = playerBodiesRef.current[player.id];
+        const lastUpdate = lastUpdateRef.current[player.id] || 0;
+        const currentTime = Date.now();
+
+        // Only update position if it's a recent server update or local player
+        if (currentTime - lastUpdate < 100 || player.id === socketRef.current?.id) {
+          Matter.Body.setPosition(body, { x: player.x, y: player.y });
+        }
       } else {
         console.log('Creating new player body:', player.id, player.x, player.y);
         const newBody = Matter.Bodies.rectangle(player.x, player.y, 50, 50, {
           render: { fillStyle: player.id === socketRef.current?.id ? 'yellow' : 'blue' },
-          frictionAir: 0,
-          friction: 0,
+          frictionAir: 0.1,
+          friction: 0.1,
           inertia: Infinity,
         });
         Matter.World.add(engine.world, newBody);
-        setPlayerBodies(prev => ({ ...prev, [player.id]: newBody }));
+        playerBodiesRef.current[player.id] = newBody;
       }
     });
-  }, [players, playerBodies, engineRef, socketRef]);
+  }, [players, engineRef, socketRef, playerBodiesRef]);
 
   return null;
 };

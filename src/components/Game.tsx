@@ -2,10 +2,10 @@ import React, { useRef, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import Matter from 'matter-js';
 import { useStore } from '../hooks/useStore';
-import GameCanvas from './GameCanvas.tsx';
-import PlayerManager from './PlayerManager.tsx';
-import BulletManager from './BulletManager.tsx';
-import InputHandler from './InputHandler.tsx';
+import GameCanvas from './GameCanvas';
+import PlayerManager from './PlayerManager';
+import BulletManager from './BulletManager';
+import InputHandler from './InputHandler';
 
 const Game: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -13,6 +13,7 @@ const Game: React.FC = () => {
   const [engine, setEngine] = useState<Matter.Engine | null>(null);
   const renderRef = useRef<Matter.Render | null>(null);
   const runnerRef = useRef<Matter.Runner | null>(null);
+  const playerBodiesRef = useRef<{ [id: string]: Matter.Body }>({});
   const { setLocalPlayerId } = useStore();
 
   useEffect(() => {
@@ -66,6 +67,7 @@ const Game: React.FC = () => {
       <PlayerManager 
         socketRef={{ current: socket }}
         engineRef={{ current: engine }}
+        playerBodiesRef={playerBodiesRef}
       />
       <BulletManager
         socketRef={{ current: socket }}
@@ -74,6 +76,8 @@ const Game: React.FC = () => {
       <InputHandler
         socketRef={{ current: socket }}
         canvasRef={canvasRef}
+        engineRef={{ current: engine }}
+        playerBodiesRef={playerBodiesRef}
       />
     </>
   );
