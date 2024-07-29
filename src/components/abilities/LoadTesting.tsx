@@ -30,8 +30,9 @@ const LoadTesting: React.FC<LoadTestingProps> = ({ engine, socketRef, playerId }
     const player = players.find(p => p.id === playerId);
     if (!player) return;
 
-    for (let i = 0; i < 20; i++) {
-      const angle = (i * Math.PI * 2) / 20;
+    const raysCount = 6;
+    for (let i = 0; i < raysCount; i++) {
+      const angle = (i * Math.PI * 2) / raysCount;
       const bulletVelocity = {
         x: Math.cos(angle) * 5,
         y: Math.sin(angle) * 5
