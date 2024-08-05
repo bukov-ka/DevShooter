@@ -1,4 +1,6 @@
-import React, { useRef, useEffect, useState } from "react";
+// src/components/Game.tsx
+
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import Matter from "matter-js";
 import { useStore } from "../hooks/useStore";
@@ -10,22 +12,34 @@ import Error500Grenade from "./abilities/Error500Grenade";
 import CSSShift from "./abilities/CSSShift";
 import LoadTesting from "./abilities/LoadTesting";
 import PlayerHUD from "./PlayerHUD";
+import DeathScreen from "./DeathScreen";
 
 const Game: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const [engine, setEngine] = useState<Matter.Engine | null>(null);
   const renderRef = useRef<Matter.Render | null>(null);
   const runnerRef = useRef<Matter.Runner | null>(null);
   const playerBodiesRef = useRef<{ [id: string]: Matter.Body }>({});
-  const { localPlayerId, localPlayerType, setLocalPlayerId } = useStore();
+  const { 
+    localPlayerId, 
+    localPlayerType, 
+    setLocalPlayerId,
+    players,
+    updatePlayer,
+    respawnPlayer,
+    playerKilled,
+    setPlayerKilled
+  } = useStore();
+  const [showDeathScreen, setShowDeathScreen] = useState(false);
 
   useEffect(() => {
+    console.log("[Game] Initializing game...");
     const newSocket = io("http://localhost:3000");
-    setSocket(newSocket);
+    socketRef.current = newSocket;
 
     newSocket.on("connect", () => {
-      console.log("Connected to server with ID:", newSocket.id);
+      console.log("[Game] Connected to server with ID:", newSocket.id);
       setLocalPlayerId(newSocket.id);
     });
 
@@ -35,6 +49,7 @@ const Game: React.FC = () => {
     setEngine(newEngine);
 
     return () => {
+      console.log("[Game] Cleaning up game resources...");
       newSocket.disconnect();
       if (renderRef.current) Matter.Render.stop(renderRef.current);
       if (runnerRef.current) Matter.Runner.stop(runnerRef.current);
@@ -45,6 +60,7 @@ const Game: React.FC = () => {
   useEffect(() => {
     if (!canvasRef.current || !engine) return;
 
+    console.log("[Game] Setting up game renderer");
     renderRef.current = Matter.Render.create({
       canvas: canvasRef.current,
       engine: engine,
@@ -60,24 +76,55 @@ const Game: React.FC = () => {
     Matter.Render.run(renderRef.current);
   }, [engine]);
 
-  if (!socket || !engine) {
+  const handlePlayerKilled = useCallback(({ killedId, killerId }: { killedId: string, killerId: string }) => {
+    console.log(`[Death] Player killed event received in handlePlayerKilled. KilledId: ${killedId}, KillerId: ${killerId}, LocalPlayerId: ${localPlayerId}`);
+    if (killedId === localPlayerId) {
+      console.log("[Death] Local player killed, setting showDeathScreen to true");
+      setShowDeathScreen(true);
+    } else {
+      console.log("[Death] Another player was killed, not showing death screen");
+    }
+  }, [localPlayerId]);
+
+  useEffect(() => {
+    if (playerKilled) {
+      handlePlayerKilled(playerKilled);
+      setPlayerKilled(null); // reset the state after handling
+    }
+  }, [playerKilled, handlePlayerKilled, setPlayerKilled]);
+
+  const handleRespawn = useCallback(() => {
+    if (!socketRef.current || !localPlayerId) return;
+
+    console.log("[Death] Respawn requested");
+    socketRef.current.emit('playerRespawn');
+    setShowDeathScreen(false);
+  }, [localPlayerId]);
+
+  if (!engine) {
     return <div>Loading...</div>;
   }
+
+  console.log("[Game] Rendering game components");
+  console.log("[Game] Local player ID:", localPlayerId);
+  console.log("[Game] Local player type:", localPlayerType);
+  console.log("[Game] Show death screen:", showDeathScreen);
+  console.log("[Game] Number of players:", players.length);
 
   return (
     <>
       <GameCanvas canvasRef={canvasRef} />
       <PlayerManager
-        socketRef={{ current: socket }}
+        socketRef={socketRef}
         engineRef={{ current: engine }}
         playerBodiesRef={playerBodiesRef}
       />
       <BulletManager
-        socketRef={{ current: socket }}
+        socketRef={socketRef}
         engineRef={{ current: engine }}
       />
       <InputHandler
-        socketRef={{ current: socket }}
+        socketRef={socketRef}
         canvasRef={canvasRef}
         engineRef={{ current: engine }}
         playerBodiesRef={playerBodiesRef}
@@ -85,14 +132,14 @@ const Game: React.FC = () => {
       {localPlayerType === "Backend Developer" && (
         <Error500Grenade
           engine={engine}
-          socketRef={{ current: socket }}
-          playerId={localPlayerId!}
+          socketRef={socketRef}
+          playerId={localPlayerId || ''}
         />
       )}
       {localPlayerType === "Frontend Developer" && (
         <CSSShift
-          socketRef={{ current: socket }}
-          playerId={localPlayerId!}
+          socketRef={socketRef}
+          playerId={localPlayerId || ''}
           engineRef={{ current: engine }}
           playerBodiesRef={playerBodiesRef}
         />
@@ -100,11 +147,16 @@ const Game: React.FC = () => {
       {localPlayerType === "QA" && (
         <LoadTesting
           engine={engine}
-          socketRef={{ current: socket }}
-          playerId={localPlayerId!}
+          socketRef={socketRef}
+          playerId={localPlayerId || ''}
         />
       )}
       <PlayerHUD />
+      {showDeathScreen ? (
+        <DeathScreen onRespawn={handleRespawn} />
+      ) : (
+        console.log("[Death] Death screen not shown")
+      )}
     </>
   );
 };

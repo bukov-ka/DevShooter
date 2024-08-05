@@ -11,7 +11,7 @@ interface InputHandlerProps {
 }
 
 const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engineRef, playerBodiesRef }) => {
-  const { players, updatePlayer, localPlayerId } = useStore();
+  const { players, updatePlayer, localPlayerId, incrementBulletsFired } = useStore();
   const keysPressed = useRef<Set<string>>(new Set());
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -25,16 +25,18 @@ const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engin
   const handleMouseDown = useCallback((e: MouseEvent) => {
     if (!socketRef.current || !canvasRef.current || !localPlayerId) return;
 
-    const localPlayer = players.find(p => p.id === localPlayerId);
-    if (!localPlayer) return;
+    const localPlayerBody = playerBodiesRef.current[localPlayerId];
+    if (!localPlayerBody) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
+    const playerPosition = localPlayerBody.position;
+
     const direction = {
-      x: mouseX - localPlayer.x,
-      y: mouseY - localPlayer.y,
+      x: mouseX - playerPosition.x,
+      y: mouseY - playerPosition.y,
     };
 
     const magnitude = Math.sqrt(direction.x ** 2 + direction.y ** 2);
@@ -44,11 +46,13 @@ const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engin
     };
 
     socketRef.current.emit('bulletFired', { 
-      position: { x: localPlayer.x, y: localPlayer.y }, 
+      position: { x: playerPosition.x, y: playerPosition.y }, 
       velocity: normalizedDirection,
       playerId: localPlayerId
     });
-  }, [players, localPlayerId, socketRef, canvasRef]);
+
+    incrementBulletsFired(localPlayerId);
+  }, [localPlayerId, socketRef, canvasRef, playerBodiesRef, incrementBulletsFired]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -66,9 +70,6 @@ const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engin
     if (!engineRef.current || !playerBodiesRef.current || !localPlayerId) return;
 
     const updateInterval = setInterval(() => {
-      const localPlayer = players.find(p => p.id === localPlayerId);
-      if (!localPlayer) return;
-
       const playerBody = playerBodiesRef.current[localPlayerId];
       if (!playerBody) return;
 
@@ -82,12 +83,12 @@ const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engin
 
       Matter.Body.applyForce(playerBody, playerBody.position, force);
 
-      updatePlayer(localPlayerId, playerBody.position.x, playerBody.position.y);
+      updatePlayer(localPlayerId, { x: playerBody.position.x, y: playerBody.position.y });
       socketRef.current?.emit('playerMove', { x: playerBody.position.x, y: playerBody.position.y });
     }, 1000 / 60);
 
     return () => clearInterval(updateInterval);
-  }, [players, updatePlayer, socketRef, engineRef, playerBodiesRef, localPlayerId]);
+  }, [updatePlayer, socketRef, engineRef, playerBodiesRef, localPlayerId]);
 
   return null;
 };
