@@ -105,12 +105,6 @@ const Game: React.FC = () => {
     return <div>Loading...</div>;
   }
 
-  console.log("[Game] Rendering game components");
-  console.log("[Game] Local player ID:", localPlayerId);
-  console.log("[Game] Local player type:", localPlayerType);
-  console.log("[Game] Show death screen:", showDeathScreen);
-  console.log("[Game] Number of players:", players.length);
-
   return (
     <>
       <GameCanvas canvasRef={canvasRef} />
@@ -152,11 +146,7 @@ const Game: React.FC = () => {
         />
       )}
       <PlayerHUD />
-      {showDeathScreen ? (
-        <DeathScreen onRespawn={handleRespawn} />
-      ) : (
-        console.log("[Death] Death screen not shown")
-      )}
+      {showDeathScreen && <DeathScreen onRespawn={handleRespawn} />}
     </>
   );
 };

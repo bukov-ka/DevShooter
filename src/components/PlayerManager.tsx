@@ -27,7 +27,7 @@ const PlayerManager: React.FC<PlayerManagerProps> = ({ socketRef, engineRef, pla
   const createPlayerBody = (id: string, x: number, y: number, isLocal: boolean) => {
     
     if (engineRef.current && !playerBodiesRef.current[id]) {
-      const newBody = Matter.Bodies.circle(x, y, 25, {
+      const newBody = Matter.Bodies.circle(x, y, 15, {
         render: { 
           fillStyle: isLocal ? 'blue' : 'red',
           sprite: {

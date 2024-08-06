@@ -8,10 +8,6 @@ interface DeathScreenProps {
 const DeathScreen: React.FC<DeathScreenProps> = ({ onRespawn }) => {
   const { players } = useStore();
 
-  useEffect(() => {
-    console.log("[DeathScreen] Rendered with players:", players);
-  }, [players]);
-
   const sortedPlayers = [...players].sort((a, b) => b.kills - a.kills);
 
   return (
