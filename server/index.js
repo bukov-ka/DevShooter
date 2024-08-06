@@ -38,7 +38,8 @@ io.on('connection', (socket) => {
     name: generateRandomName(),
     kills: 0,
     deaths: 0,
-    bulletsFired: 0
+    bulletsFired: 0,
+    isDead: false
   };
 
   console.log('New player created:', socket.id, players[socket.id]);
@@ -80,6 +81,7 @@ io.on('connection', (socket) => {
       players[socket.id].health = 100;
       players[socket.id].x = Math.random() * 800;
       players[socket.id].y = Math.random() * 600;
+      players[socket.id].isDead = false;  // Reset death state
       console.log(`[Death Debug] Player respawned. ID: ${socket.id}, Health: ${players[socket.id].health}`);
       io.emit('playerRespawned', { id: socket.id, ...players[socket.id] });
     }
@@ -108,7 +110,7 @@ setInterval(() => {
 
     // Check for collisions with players
     Object.entries(players).forEach(([playerId, player]) => {
-      if (playerId !== bullet.playerId) {
+      if (playerId !== bullet.playerId && !player.isDead) {  // Check if player is not dead
         const dx = player.x - bullet.position.x;
         const dy = player.y - bullet.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -124,8 +126,9 @@ setInterval(() => {
             console.log(`[Death Debug] Player health updated. ID: ${playerId}, Old Health: ${oldHealth}, New Health: ${hitPlayer.health}, Damage: ${damage}`);
             io.emit('playerUpdated', { id: playerId, health: hitPlayer.health });
 
-            if (hitPlayer.health <= 0) {
+            if (hitPlayer.health <= 0 && !hitPlayer.isDead) {  // Check if player wasn't already dead
               console.log(`[Death Debug] Player died. ID: ${playerId}`);
+              hitPlayer.isDead = true;  // Set death state
               if (players[bullet.playerId]) {
                 players[bullet.playerId].kills++;
                 console.log(`[Death Debug] Killer's kills increased. ID: ${bullet.playerId}, Kills: ${players[bullet.playerId].kills}`);
