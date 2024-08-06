@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useStore } from '../hooks/useStore';
 
 interface DeathScreenProps {
@@ -27,8 +27,27 @@ const DeathScreen: React.FC<DeathScreenProps> = ({ onRespawn }) => {
       zIndex: 1000,
     }}>
       <h2>Game Over</h2>
-      {/* ... (rest of the component remains the same) */}
-      <button 
+      <table style={{ margin: '20px', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ padding: '10px', border: '1px solid white' }}>Player Name</th>
+            <th style={{ padding: '10px', border: '1px solid white' }}>Bullets Fired</th>
+            <th style={{ padding: '10px', border: '1px solid white' }}>Deaths</th>
+            <th style={{ padding: '10px', border: '1px solid white' }}>Kills</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedPlayers.map(player => (
+            <tr key={player.id}>
+              <td style={{ padding: '10px', border: '1px solid white' }}>{player.name}</td>
+              <td style={{ padding: '10px', border: '1px solid white' }}>{player.bulletsFired}</td>
+              <td style={{ padding: '10px', border: '1px solid white' }}>{player.deaths}</td>
+              <td style={{ padding: '10px', border: '1px solid white' }}>{player.kills}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button
         onClick={() => {
           console.log("[DeathScreen] Respawn button clicked");
           onRespawn();

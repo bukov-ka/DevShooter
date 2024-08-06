@@ -11,7 +11,7 @@ interface InputHandlerProps {
 }
 
 const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engineRef, playerBodiesRef }) => {
-  const { players, updatePlayer, localPlayerId, incrementBulletsFired } = useStore();
+  const { players, updatePlayer, localPlayerId } = useStore();
   const keysPressed = useRef<Set<string>>(new Set());
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -51,8 +51,7 @@ const InputHandler: React.FC<InputHandlerProps> = ({ socketRef, canvasRef, engin
       playerId: localPlayerId
     });
 
-    incrementBulletsFired(localPlayerId);
-  }, [localPlayerId, socketRef, canvasRef, playerBodiesRef, incrementBulletsFired]);
+  }, [localPlayerId, socketRef, canvasRef, playerBodiesRef]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);

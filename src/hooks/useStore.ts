@@ -81,11 +81,19 @@ export const useStore = create<GameState>((set) => ({
       player.id === id ? { ...player, deaths: player.deaths + 1 } : player
     ),
   })),
-  incrementBulletsFired: (id) => set((state) => ({
-    players: state.players.map((player) =>
-      player.id === id ? { ...player, bulletsFired: player.bulletsFired + 1 } : player
-    ),
-  })),
+  incrementBulletsFired: (id) => set((state) => {
+    const updatedPlayers = state.players.map((player) => {
+      if (player.id === id) {
+        const updatedPlayer = { ...player, bulletsFired: player.bulletsFired + 1 };
+        console.log(`Incrementing bullets fired for player ${id}:`, updatedPlayer.bulletsFired);
+        return updatedPlayer;
+      }
+      return player;
+    });
+    console.log('Updated players state:', updatedPlayers);
+    return { players: updatedPlayers };
+  }),
+  
   respawnPlayer: (id) => set((state) => ({
     players: state.players.map((player) =>
       player.id === id ? { ...player, health: 100 } : player

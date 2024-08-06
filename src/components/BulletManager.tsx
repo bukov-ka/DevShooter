@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Matter from 'matter-js';
 import { Socket } from 'socket.io-client';
+import { useStore } from '../hooks/useStore';
 
 interface BulletManagerProps {
   socketRef: React.RefObject<Socket | null>;
@@ -14,6 +15,7 @@ interface Bullet {
 
 const BulletManager: React.FC<BulletManagerProps> = ({ socketRef, engineRef }) => {
   const [bullets, setBullets] = useState<Bullet[]>([]);
+  const { incrementBulletsFired } = useStore();
 
   useEffect(() => {
     if (!socketRef.current || !engineRef.current) return;
@@ -37,6 +39,8 @@ const BulletManager: React.FC<BulletManagerProps> = ({ socketRef, engineRef }) =
 
       Matter.World.add(engine.world, bullet);
       setBullets((prevBullets) => [...prevBullets, { id: bulletData.id, body: bullet }]);
+
+      incrementBulletsFired(playerId);
     };
 
     socket.on('bulletFired', handleBulletFired);
